@@ -3,12 +3,9 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useRouter } from "next/navigation";
-import { Loader2, ArrowLeft, Sparkles } from "lucide-react";
+import { toast } from "sonner";
+import { Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -16,74 +13,67 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { generateCoverLetter } from "@/actions/cover-letter";
-import { toast } from "sonner";
-import Link from "next/link";
+import useFetch from "@/hooks/use-fetch";
+import { coverLetterSchema } from "@/app/lib/schema";
+import { useRouter } from "next/navigation";
 
-const coverLetterSchema = z.object({
-  companyName: z.string().min(1, "Company name is required"),
-  jobTitle: z.string().min(1, "Job title is required"),
-  jobDescription: z.string().min(10, "Job description is required"),
-});
-
-export default function NewCoverLetterPage() {
+export default function CoverLetterGenerator() {
   const router = useRouter();
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
+    reset,
   } = useForm({
     resolver: zodResolver(coverLetterSchema),
   });
 
-  const onSubmit = async (data) => {
-    setIsSubmitting(true);
-    try {
-      const response = await generateCoverLetter(data);
+  const {
+    loading: generating,
+    fn: generateLetterFn,
+    data: generatedLetter,
+  } = useFetch(generateCoverLetter);
+
+  useEffect(() => {
+    if (generatedLetter?.id) {
       toast.success("Cover letter generated successfully!");
-      // Redirect to the view page for this letter
-      router.push(`/ai-cover-letter/${response.id}`); 
+      // ✅ FIXED: Added 'ai-' to match your folder name
+      router.push(`/ai-cover-letter/${generatedLetter.id}`);
+      reset();
+    }
+  }, [generatedLetter]);
+
+  const onSubmit = async (data) => {
+    try {
+      await generateLetterFn(data);
     } catch (error) {
-      toast.error("Failed to generate cover letter. Please try again.");
-      console.error(error);
-    } finally {
-      setIsSubmitting(false);
+      toast.error(error.message || "Failed to generate cover letter");
     }
   };
 
   return (
-    <div className="container mx-auto py-6">
-      <div className="flex flex-col space-y-2 mb-6">
-        <Link href="/ai-cover-letter/new">
-            <Button variant="link" className="gap-2 pl-0 text-muted-foreground">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Cover Letters
-            </Button>
-        </Link>
-        <h1 className="text-5xl font-bold gradient-title">Create Cover Letter</h1>
-        <p className="text-muted-foreground">
-          Generate a tailored cover letter for a specific job application.
-        </p>
-      </div>
-
+    <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Job Details</CardTitle>
           <CardDescription>
-            Provide details about the position you are applying for.
+            Provide information about the position you're applying for
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Company Name</label>
+                <Label htmlFor="companyName">Company Name</Label>
                 <Input
+                  id="companyName"
+                  placeholder="Enter company name"
                   {...register("companyName")}
-                  placeholder="e.g. Acme Corp"
-                  error={errors.companyName}
                 />
                 {errors.companyName && (
                   <p className="text-sm text-red-500">
@@ -91,13 +81,13 @@ export default function NewCoverLetterPage() {
                   </p>
                 )}
               </div>
-              
+
               <div className="space-y-2">
-                <label className="text-sm font-medium">Job Title</label>
+                <Label htmlFor="jobTitle">Job Title</Label>
                 <Input
+                  id="jobTitle"
+                  placeholder="Enter job title"
                   {...register("jobTitle")}
-                  placeholder="e.g. Senior Software Engineer"
-                  error={errors.jobTitle}
                 />
                 {errors.jobTitle && (
                   <p className="text-sm text-red-500">
@@ -108,12 +98,12 @@ export default function NewCoverLetterPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Job Description</label>
+              <Label htmlFor="jobDescription">Job Description</Label>
               <Textarea
+                id="jobDescription"
+                placeholder="Paste the job description here"
+                className="h-32"
                 {...register("jobDescription")}
-                placeholder="Paste the job description here..."
-                className="h-64 font-mono text-sm"
-                error={errors.jobDescription}
               />
               {errors.jobDescription && (
                 <p className="text-sm text-red-500">
@@ -123,8 +113,8 @@ export default function NewCoverLetterPage() {
             </div>
 
             <div className="flex justify-end">
-              <Button type="submit" disabled={isSubmitting} size="lg">
-                {isSubmitting ? (
+              <Button type="submit" disabled={generating}>
+                {generating ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Generating...
